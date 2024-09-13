@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import xgboost as xgb
 
-def similarPlayers(df, df_unique, playerId, reference_season, target_season='2024', importance_threshold=0.01):
+def similarPlayers(df, df_unique, playerId, reference_season, target_season='2024', importance_threshold=0.0175):
     # Filtrar el DataFrame para obtener los datos de la temporada de referencia y el jugador seleccionado
     df_reference = df[(df['seasonName'] == reference_season) & (df['playerId'] == playerId)].set_index('playerId').select_dtypes(include=[np.number])
     
@@ -13,12 +13,22 @@ def similarPlayers(df, df_unique, playerId, reference_season, target_season='202
     # Obtener las características del jugador de referencia
     reference_player = df_reference.loc[playerId]
     
+        # Obtener la posición del jugador de referencia
+    player_role = df_unique[df_unique['playerId'] == playerId]['code2Role'].values[0]
+    
     # Filtrar el DataFrame para la temporada de búsqueda
-    df_target = df[df['seasonName'] == target_season].set_index('playerId').select_dtypes(include=[np.number])
+    df_target = df[df['seasonName'] == target_season]
+    
+    # Aplicar el filtro por posición SOLO si el jugador es 'GK' (portero)
+    if player_role == 'GK':
+        df_target = df_target[df_target['playerId'].isin(df_unique[df_unique['code2Role'] == 'GK']['playerId'])]
     
     if df_target.empty:
-        raise ValueError("No se encontraron datos para la temporada objetivo.")
+        raise ValueError(f"No se encontraron jugadores de la misma posición ({player_role}) para la temporada objetivo.")
     
+    # Continuar con el filtrado por tipos numéricos y excluir columnas innecesarias
+    df_target = df_target.set_index('playerId').select_dtypes(include=[np.number])
+
     # Excluir las columnas no deseadas antes de la normalización
     excluded_columns = ['matches', 'matchesInStart', 'matchesSubstituted', 'matchesComingOff', 'minutesOnField', 'minutesTagged']
     df_target_filtered = df_target.drop(columns=excluded_columns, errors='ignore')
@@ -57,20 +67,24 @@ def similarPlayers(df, df_unique, playerId, reference_season, target_season='202
     # Añadir las columnas desde df_unique
     result_df = result_df.merge(df_unique[['playerId', 'shortName', 'code2Role', 'teamName',
         'seasonName', 'nameRole', 'age']], on='playerId', how='left')
+    
+    # Añadir la columna 'minutesOnField' desde df
+    result_df = result_df.merge(df[df['seasonName'] == target_season][['playerId', 'minutesOnField']], on='playerId', how='left')
 
     # Filtrar el resultado final para la temporada objetivo
     result_df = result_df[result_df['seasonName'] == target_season]
 
-    # Reorganizar columnas para que 'shortName', 'teamOfficialName', 'seasonName' aparezcan antes de 'similarity'
-    cols = ['shortName', 'code2Role', 'age', 'teamName', 'seasonName', 'similarity']
+    # Reorganizar columnas para que 'shortName', 'teamOfficialName' aparezcan antes de 'similarity'
+    cols = ['playerId', 'minutesOnField', 'shortName', 'code2Role', 'age', 'teamName', 'similarity']
     result_df = result_df[cols].reset_index(drop=True)
+
+    result_df['similarity'] = result_df['similarity'].round(2)
 
     result_df.rename(columns={
         'shortName': 'Nombre',
         'age': 'Edad',
         'code2Role': 'Pos',
         'teamName': 'Equipo',
-        'seasonName': 'Temporada',
         'similarity': '% Similitud'
         }, inplace=True)
 
