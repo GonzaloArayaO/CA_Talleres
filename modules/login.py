@@ -1,11 +1,9 @@
 # login - logout
 
 import streamlit as st
-import json
 
-def load_users(file_path='users.json'):
-    with open(file_path, 'r') as file:
-        return json.load(file)
+def load_users():
+        return st.secrets['users']
 
 def login_user(users, username, password):
     if username in users and password == users[username]:

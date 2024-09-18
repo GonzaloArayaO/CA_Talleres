@@ -99,84 +99,97 @@ def main():
             # Mover el botón a la barra lateral
             buscar_similares = st.button('Buscar Jugadores Similares')
 
-        if buscar_similares:
-            try:
-                # Buscar jugadores similares y filtrar por edad
-                result_df, important_columns = similarPlayers(df_group, df_unique, selected_player_id, selected_reference_season)
-                result_df = result_df[
-                    (result_df['Edad'] >= selected_age_range[0]) & 
-                    (result_df['Edad'] <= selected_age_range[1])
-                    ]
-                # Filtrar por minutos en campo
-                result_df = result_df[result_df['minutesOnField'] >= min_minutes]
+    if buscar_similares:
+        try:
+            # Buscar jugadores similares y filtrar por edad
+            result_df, important_columns = similarPlayers(df_group, df_unique, selected_player_id, selected_reference_season)
+            result_df = result_df[
+                (result_df['Edad'] >= selected_age_range[0]) & 
+                (result_df['Edad'] <= selected_age_range[1])
+                ]
+            # Filtrar por minutos en campo
+            result_df = result_df[result_df['minutesOnField'] >= min_minutes]
 
-                # Guardar los resultados y columnas importantes en session_state
-                st.session_state.result_df = result_df
-                st.session_state.important_columns = important_columns
-                st.session_state.selected_player_id = selected_player_id
-                st.session_state.selected_reference_season = selected_reference_season
-            except ValueError as e:
-                st.error(e)
-            except Exception as e:
-                st.error(f"Error inesperado: {e}")
+            # Guardar los resultados y columnas importantes en session_state
+            st.session_state.result_df = result_df
+            st.session_state.important_columns = important_columns
+            st.session_state.selected_player_id = selected_player_id
+            st.session_state.selected_reference_season = selected_reference_season
+        except ValueError as e:
+            st.error(e)
+        except Exception as e:
+            st.error(f"Error inesperado: {e}")
 
-        # Mostrar los resultados o el mensaje si no se ha buscado aún
-        if 'result_df' in st.session_state and 'important_columns' in st.session_state:
-            # Primera fila: DataFrame a la izquierda y Markdown a la derecha
-            col_left, col_right = st.columns([3, 1])
+    # Mostrar los resultados o el mensaje si no se ha buscado aún
+    if 'result_df' in st.session_state and 'important_columns' in st.session_state:
+        # Primera fila: DataFrame a la izquierda y Markdown a la derecha
+        col_left, col_right = st.columns([3, 1])
 
-            with col_left:
-                st.subheader('Resultados de Similitud', divider='blue')
-                st.markdown('*- Sólo jugadores de temporada 2024.*')
-                result_df_to_display = st.session_state.result_df.drop(columns=['playerId', 'minutesOnField'])
-                st.dataframe(result_df_to_display)
+        with col_left:
+            st.subheader('Resultados de Similitud', divider='blue')
+            st.markdown('*- Sólo jugadores de temporada 2024.*')
+            result_df_to_display = st.session_state.result_df.drop(columns=['playerId', 'minutesOnField'])
+            st.dataframe(result_df_to_display)
 
-            with col_right:
-                add_vertical_space(5)
-                important_columns_str = " - ".join(st.session_state.important_columns)
-                st.write('**Columnas utilizadas en el análisis:**')
-                st.write(f"*{important_columns_str}*")
-                st.markdown(f":blue-background[{len(st.session_state.important_columns)} columnas utilizadas.]")
+        with col_right:
+            add_vertical_space(5)
+            important_columns_str = " - ".join(st.session_state.important_columns)
+            st.write('**Columnas utilizadas en el análisis:**')
+            st.write(f"*{important_columns_str}*")
+            st.markdown(f":blue-background[{len(st.session_state.important_columns)} columnas utilizadas.]")
 
-            st.subheader('', divider='blue')
-            # Añadir selectbox para seleccionar un jugador del DataFrame de resultados
-            selected_result_player = st.selectbox(
-                'Selecciona un jugador para comparar',
-                st.session_state.result_df['Nombre'].unique()
-            )
+        st.subheader('', divider='blue')
+        # Añadir selectbox para seleccionar un jugador del DataFrame de resultados
+        selected_result_player = st.selectbox(
+            'Selecciona un jugador para comparar',
+            st.session_state.result_df['Nombre'].unique()
+        )
 
-            # Filtrar el DataFrame para obtener los datos del jugador seleccionado
-            player_data_for_chart = st.session_state.result_df[st.session_state.result_df['Nombre'] == selected_result_player]
-            if not player_data_for_chart.empty:
-                player_id_for_chart = player_data_for_chart['playerId'].iloc[0]
+        # Filtrar el DataFrame para obtener los datos del jugador seleccionado
+        player_data_for_chart = st.session_state.result_df[st.session_state.result_df['Nombre'] == selected_result_player]
+        if not player_data_for_chart.empty:
+            player_id_for_chart = player_data_for_chart['playerId'].iloc[0]
 
+        col_graph1, col_graph2 = st.columns(2)
 
-            col_graph1, col_graph2 = st.columns(2)
+        # Obtener las estadísticas de ambos jugadores para las columnas importantes
+        player1_data = st.session_state.df_group[
+            (st.session_state.df_group['playerId'] == st.session_state.selected_player_id) & 
+            (st.session_state.df_group['seasonName'] == st.session_state.selected_reference_season)
+        ][st.session_state.important_columns].iloc[0]
 
-            with col_graph1:
-                st.plotly_chart(bar_chart_player_stats(
-                    st.session_state.df_group, 
-                    st.session_state.selected_player_id, 
-                    st.session_state.important_columns,
-                    st.session_state.selected_reference_season
-                    ))
-                
-            with col_graph2:
-                # Mostrar gráfico del jugador seleccionado
-                st.plotly_chart(bar_chart_player_stats(
+        player2_data = st.session_state.df_group[
+            (st.session_state.df_group['playerId'] == player_id_for_chart) & 
+            (st.session_state.df_group['seasonName'] == '2024')
+        ][st.session_state.important_columns].iloc[0]
+
+        # Calcular el valor máximo entre ambos jugadores para las columnas importantes
+        x_max_value = max(player1_data.max(), player2_data.max())
+
+        with col_graph1:
+            st.plotly_chart(bar_chart_player_stats(
+                st.session_state.df_group, 
+                st.session_state.selected_player_id, 
+                st.session_state.important_columns,
+                st.session_state.selected_reference_season,
+                x_max=x_max_value  # Pasar el límite máximo del eje X
+            ))
+
+        with col_graph2:
+            st.plotly_chart(bar_chart_player_stats(
                 st.session_state.df_group, 
                 player_id_for_chart, 
                 st.session_state.important_columns,
-                selected_reference_season = '2024'
-                ))
+                '2024',
+                x_max=x_max_value  # Pasar el mismo límite máximo del eje X
+            ))
 
-
-        else:
-            # Mostrar mensaje si aún no se han buscado jugadores similares
-            st.markdown('## Análisis de Similitud de Jugadores')
-            add_vertical_space(2)
-            st.markdown("""Selecciona los parámetros en Filtros y haz clic en **Buscar Jugadores Similares** 
-                para ver los resultados.""")
+    else:
+        # Mostrar mensaje si aún no se han buscado jugadores similares
+        st.markdown('## Análisis de Similitud de Jugadores')
+        add_vertical_space(2)
+        st.markdown("""Selecciona los parámetros en Filtros y haz clic en **Buscar Jugadores Similares** 
+            para ver los resultados.""")
 
 if __name__ == "__main__":
     main()

@@ -5,7 +5,7 @@ import xgboost as xgb
 
 def similarPlayers(df, df_unique, playerId, reference_season, target_season='2024', importance_threshold=0.0175):
     # Filtrar el DataFrame para obtener los datos de la temporada de referencia y el jugador seleccionado
-    df_reference = df[(df['seasonName'] == reference_season) & (df['playerId'] == playerId)].set_index('playerId').select_dtypes(include=[np.number])
+    df_reference = df[(df['seasonName'] == reference_season) & (df['playerId'] == playerId)].set_index('playerId')
     
     if df_reference.empty:
         raise ValueError("No se encontraron datos para el jugador o temporada de referencia.")
@@ -13,33 +13,44 @@ def similarPlayers(df, df_unique, playerId, reference_season, target_season='202
     # Obtener las características del jugador de referencia
     reference_player = df_reference.loc[playerId]
     
-        # Obtener la posición del jugador de referencia
+    # Obtener la posición del jugador de referencia
     player_role = df_unique[df_unique['playerId'] == playerId]['code2Role'].values[0]
     
-    # Filtrar el DataFrame para la temporada de búsqueda
-    df_target = df[df['seasonName'] == target_season]
-    
-    # Aplicar el filtro por posición SOLO si el jugador es 'GK' (portero)
-    if player_role == 'GK':
-        df_target = df_target[df_target['playerId'].isin(df_unique[df_unique['code2Role'] == 'GK']['playerId'])]
-    
-    if df_target.empty:
-        raise ValueError(f"No se encontraron jugadores de la misma posición ({player_role}) para la temporada objetivo.")
-    
-    # Continuar con el filtrado por tipos numéricos y excluir columnas innecesarias
-    df_target = df_target.set_index('playerId').select_dtypes(include=[np.number])
+    # Si el jugador no es portero (GK), eliminar las métricas de portero
+    if player_role != 'GK':
+        gk_metrics = ['gkCleanSheets', 'gkConcededGoals', 'gkShotsAgainst', 'gkExits', 
+                      'gkSuccessfulExits', 'gkAerialDuels', 'gkAerialDuelsWon', 'gkSaves',
+                      'goalKicksShort', 'goalKicksLong']
+        df_reference = df_reference.drop(columns=gk_metrics, errors='ignore')
+        df = df.drop(columns=gk_metrics, errors='ignore')
 
+    # Continuar con el filtrado por tipos numéricos en ambos DataFrames
+    df_reference = df_reference.select_dtypes(include=[np.number])
+    df_target = df[df['seasonName'] == target_season].set_index('playerId').select_dtypes(include=[np.number])
+
+    if df_target.empty:
+        raise ValueError(f"No se encontraron jugadores para la temporada objetivo ({target_season}).")
+    
     # Excluir las columnas no deseadas antes de la normalización
     excluded_columns = ['matches', 'matchesInStart', 'matchesSubstituted', 'matchesComingOff', 'minutesOnField', 'minutesTagged']
     df_target_filtered = df_target.drop(columns=excluded_columns, errors='ignore')
     
+    # Asegurarse de que las columnas de referencia y objetivo sean las mismas
+    common_columns = df_reference.columns.intersection(df_target_filtered.columns)
+    df_reference = df_reference[common_columns]
+    df_target_filtered = df_target_filtered[common_columns]
+
     # Normalización de datos
     scaler = MinMaxScaler()
-    df_target_normalized = pd.DataFrame(scaler.fit_transform(df_target_filtered), columns=df_target_filtered.columns, index=df_target_filtered.index)
     
-    # Crear una columna sintética de diferencia con el jugador de referencia
-    reference_player_filtered = reference_player.drop(labels=excluded_columns, errors='ignore')
+    # Ajustar el scaler con las columnas filtradas
+    df_target_normalized = pd.DataFrame(scaler.fit_transform(df_target_filtered), columns=common_columns, index=df_target_filtered.index)
+    
+    # Normalizar las características del jugador de referencia
+    reference_player_filtered = reference_player[common_columns]
     reference_player_normalized = scaler.transform(reference_player_filtered.values.reshape(1, -1)).flatten()
+
+    # Calcular diferencias
     difference = ((df_target_normalized - reference_player_normalized) ** 2).sum(axis=1)
 
     # Entrenar el modelo XGBoost para seleccionar características importantes
@@ -48,11 +59,11 @@ def similarPlayers(df, df_unique, playerId, reference_season, target_season='202
     
     # Obtener la importancia de las características
     importances = model.feature_importances_
-    important_columns = df_target_normalized.columns[importances > importance_threshold]
+    important_columns = common_columns[importances > importance_threshold]
     df_target_important = df_target_normalized[important_columns]
 
     # Filtrar y normalizar las características del jugador de referencia usando el mismo scaler
-    reference_player_important = pd.DataFrame(reference_player_normalized.reshape(1, -1), columns=df_target_filtered.columns)
+    reference_player_important = pd.DataFrame(reference_player_normalized.reshape(1, -1), columns=common_columns)
     reference_player_important = reference_player_important[important_columns].values
     
     # Calcular la similitud entre el jugador de referencia y los jugadores de la temporada objetivo
