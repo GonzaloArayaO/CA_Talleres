@@ -153,21 +153,36 @@ def main():
 
             col_graph1, col_graph2 = st.columns(2)
 
+            # Obtener las estadísticas de ambos jugadores para las columnas importantes
+            player1_data = st.session_state.df_group[
+                (st.session_state.df_group['playerId'] == st.session_state.selected_player_id) & 
+                (st.session_state.df_group['seasonName'] == st.session_state.selected_reference_season)
+            ][st.session_state.important_columns].iloc[0]
+
+            player2_data = st.session_state.df_group[
+                (st.session_state.df_group['playerId'] == player_id_for_chart) & 
+                (st.session_state.df_group['seasonName'] == '2024')
+            ][st.session_state.important_columns].iloc[0]
+
+            # Calcular el valor máximo entre ambos jugadores para las columnas importantes
+            x_max_value = max(player1_data.max(), player2_data.max())
+
             with col_graph1:
                 st.plotly_chart(bar_chart_player_stats(
                     st.session_state.df_group, 
                     st.session_state.selected_player_id, 
                     st.session_state.important_columns,
-                    st.session_state.selected_reference_season
-                    ))
-                
+                    st.session_state.selected_reference_season,
+                    x_max=x_max_value  # Pasar el límite máximo del eje X
+                ))
+
             with col_graph2:
-                # Mostrar gráfico del jugador seleccionado
                 st.plotly_chart(bar_chart_player_stats(
-                st.session_state.df_group, 
-                player_id_for_chart, 
-                st.session_state.important_columns,
-                selected_reference_season = '2024'
+                    st.session_state.df_group, 
+                    player_id_for_chart, 
+                    st.session_state.important_columns,
+                    '2024',
+                    x_max=x_max_value  # Pasar el mismo límite máximo del eje X
                 ))
 
 
