@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 from streamlit_extras.add_vertical_space import add_vertical_space
 import pandas as pd
@@ -8,8 +9,12 @@ from modules.similar_players import similarPlayers
 from modules.login import load_users, login_user, logout_user
 from modules.bar_chart import bar_chart_player_stats
 
+def get_path(*path_parts):
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, *path_parts)
+
 # Configuracion pagina
-im = Image.open('resources/talleres_logo.png')
+im = Image.open(get_path('resources', 'talleres_logo.png'))
 st.set_page_config(
     page_title='Scouting CA Talleres',
     page_icon=im
@@ -35,10 +40,10 @@ def main():
 
     col1, col2, col3 = st.columns([1, 3, 1])
     with col1:
-        st.image('resources/talleres_logo.png', width=70)
+        st.image(get_path('resources', 'talleres_logo.png'), width=70)
 
     with col3:
-        st.image('resources/sdc_logo_hor.png')
+        st.image(get_path('resources', 'sdc_logo_hor.png'))
 
     users = load_users()
 
