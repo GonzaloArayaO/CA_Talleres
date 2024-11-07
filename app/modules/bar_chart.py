@@ -25,7 +25,7 @@ def bar_chart_player_stats(df, player_id, important_columns, selected_reference_
 
     # Calcular la altura del gráfico en función del número de barras
     num_metrics = len(columns)
-    height_per_bar = 40
+    height_per_bar = 28
     height = max(400, num_metrics * height_per_bar)
 
     # Crear el gráfico de barras

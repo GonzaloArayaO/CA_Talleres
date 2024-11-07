@@ -2,14 +2,27 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import xgboost as xgb
+from modules.positions import get_position_mapping
 
 target_seasons = ['2024', '2023/2024', '2024/2025']
 
+position_mapping = get_position_mapping()
+
 def similarPlayers(
-    df_group, df_unique, df_positions, playerId, reference_season,
-    target_seasons=target_seasons, selected_positions=None, 
-    selected_nationalities=None, selected_age_range=(0, 100), min_minutes=0,
-    num_results=20, importance_threshold=0.01
+    df_group, 
+    df_unique, 
+    df_positions, 
+    playerId, 
+    reference_season,
+    target_seasons=target_seasons, 
+    selected_primary_positions=None,
+    selected_secondary_positions=None,
+    selected_nationalities=None, 
+    selected_age_range=(0, 100), min_minutes=0,
+    selected_countries_output=None, 
+    selected_competitions_output=None,
+    num_results=20, 
+    importance_threshold=0.01
 ):
     # 1. Obtener las métricas del jugador de referencia
     df_reference = df_group[
@@ -51,22 +64,51 @@ def similarPlayers(
     df_group = df_group[df_group['playerId'].isin(filtered_player_ids)]
 
     # 5. Aplicar los filtros de posición
-    if selected_positions:
-        if 'Goalkeeper' in selected_positions:
-            df_positions_filtered = df_positions[df_positions['position'] == 'Goalkeeper']
-        else:
-            df_positions_filtered = df_positions[
-                df_positions['position'].isin(selected_positions) & 
-                (df_positions['position'] != 'Goalkeeper')
-            ]
+    if 'Goalkeeper' in selected_secondary_positions or 'GK' in selected_primary_positions:
+        # Filtrar exclusivamente por porteros
+        df_positions_filtered = df_positions[df_positions['position'] == 'Goalkeeper']
         df_group = df_group[df_group['playerId'].isin(df_positions_filtered['playerId'])]
+
+    elif selected_secondary_positions:
+        # Filtrar por las posiciones secundarias si están seleccionadas
+        df_positions_filtered = df_positions[df_positions['position'].isin(selected_secondary_positions)]
+        df_group = df_group[df_group['playerId'].isin(df_positions_filtered['playerId'])]
+
+    elif selected_primary_positions:
+        # Si no hay posiciones secundarias, filtra por las primarias
+        primary_positions_filtered = []
+        for primary in selected_primary_positions:
+            primary_positions_filtered.extend(position_mapping[primary])  # Obtiene las posiciones secundarias relacionadas
+
+        # Filtrar jugadores en df_unique que coincidan con las posiciones primarias seleccionadas
+        df_unique_filtered = df_unique[df_unique['code2Role'].isin(selected_primary_positions)]
+        
+        # Obtener los playerIds de los jugadores con la posición primaria seleccionada
+        primary_player_ids = df_unique_filtered['playerId'].unique()
+        
+        # Filtrar df_group utilizando estos playerIds
+        df_group = df_group[df_group['playerId'].isin(primary_player_ids)]
+
+    # 6. Filtro adicional por países de competencia
+    if selected_countries_output:
+        df_unique_filtered = df_unique[df_unique['nameArea'].isin(selected_countries_output)]
+        df_group = df_group[df_group['playerId'].isin(df_unique_filtered['playerId'])]
+
+    # 7. Filtro adicional por nombre de competencias
+    if selected_competitions_output:
+        df_unique_filtered = df_unique[df_unique['competitionName'].isin(selected_competitions_output)]
+        df_group = df_group[df_group['playerId'].isin(df_unique_filtered['playerId'])]
 
     # 6. Eliminar métricas de portero si el jugador no es portero
     player_role = df_unique[df_unique['playerId'] == playerId]['code2Role'].values[0]
     if player_role != 'GK':
         gk_metrics = ['gkCleanSheetsTotal', 'gkConcededGoalsTotal', 'gkShotsAgainstTotal', 
                       'gkExitsTotal', 'gkSuccessfulExitsTotal', 'gkAerialDuelsTotal', 
-                      'gkAerialDuelsWonTotal', 'gkSavesTotal', 'goalKicksShortTotal', 'goalKicksLongTotal']
+                      'gkAerialDuelsWonTotal', 'gkSavesTotal', 'goalKicksShortTotal', 'goalKicksLongTotal',
+                      'gkAerialDuelsPer90', 'gkAerialDuelsWonPer90', 'gkConcededGoalsPer90',
+                      'gkExitsPer90', 'gkSavesPer90', 'gkShotsAgainstPer90',
+                      'gkSuccessfulExitsPer90', 'gkAerialDuelsWonPercent', 'gkSavesPercent',
+                      'gkSuccessfulExitsPercent']
         df_reference = df_reference.drop(columns=gk_metrics, errors='ignore')
         df_group = df_group.drop(columns=gk_metrics, errors='ignore')
 
@@ -134,5 +176,7 @@ def similarPlayers(
         'nameBirthArea': 'Pais nacimiento',
         'namePassportArea': 'Pais pasaporte'
     }, inplace=True)
+
+    result_df = result_df.drop_duplicates(subset='playerId')
 
     return result_df.head(num_results), important_columns.to_list()
