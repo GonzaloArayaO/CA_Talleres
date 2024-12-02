@@ -4,8 +4,6 @@ from sklearn.preprocessing import MinMaxScaler
 import xgboost as xgb
 from modules.positions import get_position_mapping
 
-target_seasons = ['2024', '2023/2024', '2024/2025']
-
 position_mapping = get_position_mapping()
 
 def similarPlayers(
@@ -14,7 +12,8 @@ def similarPlayers(
     df_positions, 
     playerId, 
     reference_season,
-    target_seasons=target_seasons, 
+    season_id,
+    target_seasons, 
     selected_primary_positions=None,
     selected_secondary_positions=None,
     selected_nationalities=None, 
@@ -27,7 +26,8 @@ def similarPlayers(
     # 1. Obtener las métricas del jugador de referencia
     df_reference = df_group[
         (df_group['seasonName'] == reference_season) & 
-        (df_group['playerId'] == playerId)
+        (df_group['playerId'] == playerId) &
+        (df_group['seasonId'] == season_id)
     ].set_index('playerId')
 
     if df_reference.empty:
@@ -155,14 +155,13 @@ def similarPlayers(
     result_df = result_df.merge(df_unique[[ 
         'playerId', 'shortName', 'code2Role', 'teamName', 'seasonName', 'age', 'foot', 
         'competitionName', 'nameArea', 'nameBirthArea', 'namePassportArea' 
-    ]], on='playerId', how='left')
+    ]], on='playerId', how='inner')
 
     result_df = result_df[result_df['seasonName'].isin(target_seasons)]
 
     cols = ['playerId', 'similarity', 'shortName', 'code2Role', 'age', 'foot', 
         'nameArea', 'teamName', 'competitionName', 'nameBirthArea', 'namePassportArea']
     result_df = result_df[cols].reset_index(drop=True)
-    result_df['similarity'] = result_df['similarity'].round(2)
 
     result_df.rename(columns={
         'similarity': '% Similitud',
@@ -178,5 +177,6 @@ def similarPlayers(
     }, inplace=True)
 
     result_df = result_df.drop_duplicates(subset='playerId')
+    result_df['% Similitud'] = result_df['% Similitud'].apply(lambda x: f'{x:.2f}')
 
     return result_df.head(num_results), important_columns.to_list()
