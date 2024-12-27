@@ -1,6 +1,9 @@
 import streamlit as st
 from streamlit_extras.add_vertical_space import add_vertical_space
 import pandas as pd
+import hashlib
+import os
+from datetime import datetime
 import plotly.graph_objects as go
 from modules.load_files import load_files
 from modules.similar_players import similarPlayers
@@ -10,6 +13,7 @@ from modules.player_profile import get_player_profiles
 from modules.radar_chart import show_radar_with_table
 from modules.pdf_exporter import save_pdf_file, style_table, generate_preview_pdf_content
 from modules.player_info_stats import generate_player_info_stats
+from modules.report_management_section import log_uploaded_file
 
 @st.cache_data
 def load_cached_files():
@@ -73,7 +77,7 @@ def show_scouting_section():
         # Filtro de equipo
         teams = sorted(df_leagues['teamName'].unique())
         selected_team = st.selectbox('Selecciona el equipo', teams, label_visibility="visible")
-        df_filtered = df_unique[df_unique['teamName'] == selected_team]
+        df_filtered = df_leagues[df_leagues['teamName'] == selected_team]
         st.session_state.selected_team = selected_team
 
         # Filtro de jugador
@@ -118,6 +122,8 @@ def show_scouting_section():
         st.session_state.selected_nationalities = selected_nationalities
 
         # Filtro de edad
+        df_unique = df_unique[df_unique['age'] >= 0]
+
         min_age = int(df_unique['age'].min())
         max_age = int(df_unique['age'].max())
         selected_age_range = st.slider('Selecciona el rango de edad', min_age, max_age, (min_age, max_age), label_visibility="visible")
@@ -379,6 +385,43 @@ def show_tab4():
         st.warning("No se encontraron datos para el jugador seleccionado.")
 
 
+
+
+# Función para calcular hash del archivo
+def calculate_file_hash(file_data):
+    return hashlib.md5(file_data).hexdigest()
+
+# Función para guardar el archivo PDF
+def save_pdf_file(pdf_data, player_id):
+    """
+    Guarda el PDF en la carpeta correspondiente al jugador.
+
+    Args:
+        pdf_data (bytes): Contenido binario del PDF.
+        player_id (str): ID del jugador.
+
+    Returns:
+        str: Ruta donde se guardó el archivo.
+    """
+    # Crear la carpeta del jugador si no existe
+    player_folder = os.path.join("data", "reports", f"player_{player_id}")
+    os.makedirs(player_folder, exist_ok=True)
+
+    # Generar nombre del archivo con fecha y hora
+    current_time = datetime.now().strftime("%Y-%m-%d")
+    file_name = f"{player_id}_automatizado_{current_time}.pdf"
+    file_path = os.path.join(player_folder, file_name)
+
+    # Convertir la ruta en absoluta
+    file_path_absolute = os.path.abspath(file_path)
+
+    # Guardar el archivo PDF
+    with open(file_path, "wb") as f:
+        f.write(pdf_data)
+
+    return file_path_absolute, file_name
+
+
 # Pestaña 5: Exportación a PDF
 def show_tab5():
     st.markdown("## Exportación de Informe a PDF")
@@ -399,9 +442,25 @@ def show_tab5():
         """
         st.markdown(pdf_viewer, unsafe_allow_html=True)
 
-    ## Verificar si hay un PDF generado para guardar
-    # if 'preview_pdf_data' in st.session_state:
-    #     if st.button("Guardar Informe PDF"):
-    #         # Guardar el PDF en el servidor
-    #         file_path = save_pdf_file(st.session_state['preview_pdf_data'], st.session_state.selected_player_id)
-    #         st.success(f"Informe guardado en: {file_path}")
+    # Verificar si hay un PDF generado para guardar
+    if 'preview_pdf_data' in st.session_state:
+        if st.button("Guardar Informe PDF"):
+            # Guardar el PDF en el servidor
+            pdf_data = st.session_state['preview_pdf_data']
+            player_id = st.session_state.selected_player_id
+            file_path, file_name = save_pdf_file(pdf_data, player_id)
+            
+            # Generar hash del archivo
+            file_hash = calculate_file_hash(pdf_data)
+
+            # Obtener usuario autenticado
+            uploaded_by = st.session_state.get('username', 'unknown_user')
+
+            # Registrar en el archivo CSV
+            log_uploaded_file(player_id, file_name, file_hash, file_path, uploaded_by)
+
+            st.success(f"Informe guardado correctamente:\n\n- **Ruta**: {file_path}\n- **Jugador ID**: {player_id}")
+
+            # Limpiar session_state
+            del st.session_state['preview_pdf_data']
+            del st.session_state['preview_pdf_base64']

@@ -10,6 +10,8 @@ from datetime import datetime
 import plotly.io as pio
 from modules.player_profile import get_player_profiles
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 def style_table(dataframe, for_pdf=False, for_info=False):
     """
     Aplica estilo a un DataFrame. Ajusta el estilo para PDF o Streamlit.
@@ -210,7 +212,7 @@ def generate_tab2_content():
     styled_table_html = style_table(stats_df, for_pdf=True, for_info=True).to_html()
 
     # Convertir la imagen a Base64
-    logo_base64 = image_to_base64('resources/sdc_logo_hor.png')
+    logo_base64 = image_to_base64(os.path.join(BASE_DIR, '..','resources','sdc_logo_hor.png'))
 
     # Crear una sección de filtros utilizados
     filters_used = f"""
@@ -568,8 +570,6 @@ def generate_full_html():
 
 ### Guardado de reporte automatizado
 
-BASE_DIR = 'data/reports/'
-
 def generate_preview_pdf_content():
     """
     Genera el contenido del PDF para previsualización.
@@ -601,12 +601,12 @@ def save_pdf_file(pdf_data, player_id):
         str: Ruta completa del archivo PDF generado.
     """
     # Crear el directorio del jugador si no existe
-    player_dir = os.path.join(BASE_DIR, f"player_{player_id}")
+    player_dir = os.path.join(BASE_DIR,'..', 'data','reports',f"player_{player_id}")
     os.makedirs(player_dir, exist_ok=True)
 
     # Crear el nombre del archivo basado en la fecha actual
     current_date = datetime.now().strftime("%Y-%m-%d")
-    output_filename = os.path.join(player_dir, f"{player_id}_automated_{current_date}.pdf")
+    output_filename = os.path.join(player_dir, f"{player_id}_automatizado_{current_date}.pdf")
 
     # Escribir el PDF en el archivo
     with open(output_filename, "wb") as pdf_file:
