@@ -1,1 +1,1 @@
-player_id,file_name,file_hash,file_path,uploaded_by,upload_datetime
+﻿player_id,file_name,file_hash,file_path,uploaded_by,upload_datetime,selected_report_type,player_name,teamName,nameArea

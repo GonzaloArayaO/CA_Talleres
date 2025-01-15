@@ -16,21 +16,15 @@ def show_report_management_section():
     st.subheader("Gestión de Informes")
 
     # Tabs for different funcionalidades
-    tab_buscador, tab2, tab3 = st.tabs(["Buscador de jugadores disponibles", "Subir informes", "Directorio"])
+    tab_1, tab2 = st.tabs(["Buscador de jugadores disponibles", "Subir informes"])
 
     # Tab 1: Buscador de jugadores disponibles
-    with tab_buscador:
+    with tab_1:
         show_tab_buscador()
 
     # Tab 2: Subir informes
     with tab2:
         show_upload_report()
-
-    # Tab 3: Directorio
-    with tab3:
-        st.subheader("Visualizador de directorio")
-        st.info('Desarrollando...')
-
 
 
 
@@ -66,10 +60,15 @@ def show_tab_buscador():
                         "Nacionalidad": player_info['nameBirthArea'],
                         "Equipo": player_info['teamName']
                     })
-
+        
         if players_with_folders:
-            st.markdown("#### Jugadores con informes disponibles")
             df_players = pd.DataFrame(players_with_folders)
+
+            # st.markdown("#### Buscar jugador por nombre")
+
+            
+
+            st.markdown("#### Jugadores con informes disponibles")
 
             # Configurar AgGrid
             gb = GridOptionsBuilder.from_dataframe(df_players)
@@ -195,7 +194,7 @@ def calculate_file_hash(file_bytes):
 # Ruta del archivo CSV
 LOG_FILE_PATH = os.path.join("data", "uploaded_files_log.csv")
 
-def log_uploaded_file(player_id, file_name, file_hash, file_path, uploaded_by, log_file=LOG_FILE_PATH):
+def log_uploaded_file(player_id, file_name, file_hash, file_path, uploaded_by, selected_report_type, player_name=None, teamName=None, nameArea=None, log_file=LOG_FILE_PATH):
     """
     Registra los detalles del archivo subido en un archivo CSV.
 
@@ -205,9 +204,13 @@ def log_uploaded_file(player_id, file_name, file_hash, file_path, uploaded_by, l
         file_hash (str): Hash del archivo.
         file_path (str): Ruta del archivo guardado.
         uploaded_by (str): Usuario que subió el archivo.
+        selected_report_type (str): Tipo de informe seleccionado.
+        player_name (str, optional): Nombre completo del jugador.
+        teamName (str, optional): Nombre del equipo.
+        nameArea (str, optional): País de la liga.
         log_file (str): Ruta del archivo CSV donde se guarda el registro.
     """
-    file_exists = os.path.isfile(log_file)  # Verificar si el archivo de log existe
+    file_exists = os.path.isfile(log_file)
 
     # Crear la carpeta "data/reports" si no existe
     os.makedirs(os.path.dirname(log_file), exist_ok=True)
@@ -215,24 +218,46 @@ def log_uploaded_file(player_id, file_name, file_hash, file_path, uploaded_by, l
     # Agregar fecha y hora actual
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    with open(log_file, "a", newline="", encoding="utf-8") as csvfile:
-        # Campos del CSV
-        fieldnames = ["player_id", "file_name", "file_hash", "file_path", "uploaded_by", "upload_datetime"]
+    # Definir los campos del CSV
+    fieldnames = ["player_id", "file_name", "file_hash", "file_path", "uploaded_by", "upload_datetime", "selected_report_type"]
+    
+    # Añadir columnas opcionales si están disponibles
+    if player_name is not None:
+        fieldnames.append("player_name")
+    if teamName is not None:
+        fieldnames.append("teamName")
+    if nameArea is not None:
+        fieldnames.append("nameArea")
+
+    # Escribir en el archivo CSV
+    with open(log_file, "a", newline="", encoding="utf-8-sig") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         # Escribir el encabezado si el archivo es nuevo
         if not file_exists:
             writer.writeheader()
 
-        # Escribir los detalles del archivo en una nueva fila
-        writer.writerow({
+        # Preparar la fila de datos
+        row = {
             "player_id": player_id,
             "file_name": file_name,
             "file_hash": file_hash,
             "file_path": file_path,
             "uploaded_by": uploaded_by,
-            "upload_datetime": current_datetime
-        })
+            "upload_datetime": current_datetime,
+            "selected_report_type": selected_report_type,
+        }
+
+        # Agregar valores opcionales si están presentes
+        if player_name is not None:
+            row["player_name"] = player_name
+        if teamName is not None:
+            row["teamName"] = teamName
+        if nameArea is not None:
+            row["nameArea"] = nameArea
+
+        writer.writerow(row)
+
 
 # Pestaña: Subir informes
 def show_upload_report():
@@ -391,6 +416,13 @@ def show_upload_report():
         # Generar el hash del archivo
         file_hash = calculate_file_hash(uploaded_file.getvalue())
 
+        # Obtener información adicional del jugador desde df_unique
+        df_unique = st.session_state.df_unique
+        player_data = df_unique.loc[df_unique['playerId'] == int(selected_player_id)].iloc[0]
+        player_name = f"{player_data['firstName']} {player_data['lastName']}"
+        team_name = player_data['teamName']
+        name_area = player_data['nameArea']
+
         # Verificar si el archivo ya existe
         if os.path.exists(save_path):
             st.warning(f"El archivo '{report_name}' ya existe.")
@@ -401,7 +433,11 @@ def show_upload_report():
                     f.write(uploaded_file.getvalue())
                     # Registrar el archivo
                     uploaded_by = st.session_state.get('username', 'unknown_user')
-                    log_uploaded_file(selected_player_id, report_name, file_hash, save_path, uploaded_by)
+                    log_uploaded_file(
+                        selected_player_id, report_name, file_hash, save_path, 
+                        uploaded_by, selected_report_type,
+                        player_name, team_name, name_area
+                        )
                     st.success(f'''
                                - Jugador: {player_name}\n\n
                                El archivo {report_name} fue sobrescrito correctamente
@@ -412,11 +448,15 @@ def show_upload_report():
         else:
             # Guardar archivo si no existe
             with open(save_path, "wb") as f:
-                f.write(uploaded_file.getvalue())
+                f.write(uploaded_file.getvalue()) 
 
             # Registrar el archivo
             uploaded_by = st.session_state.get('username', 'unknown_user')
-            log_uploaded_file(selected_player_id, report_name, file_hash, save_path, uploaded_by)
+            log_uploaded_file(
+                selected_player_id, report_name, file_hash, save_path, 
+                uploaded_by, selected_report_type,
+                player_name, team_name, name_area
+                )
 
             st.success(f"-  Jugador: {player_name}\n\nInforme guardado correctamente: {report_name}")
             st.info(f"Ruta del archivo: {save_path}")

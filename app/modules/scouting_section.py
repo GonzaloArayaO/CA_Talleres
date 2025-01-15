@@ -456,8 +456,20 @@ def show_tab5():
             # Obtener usuario autenticado
             uploaded_by = st.session_state.get('username', 'unknown_user')
 
-            # Registrar en el archivo CSV
-            log_uploaded_file(player_id, file_name, file_hash, file_path, uploaded_by)
+            # Obtener información adicional del jugador desde df_unique
+            df_unique = st.session_state.df_unique
+            player_data = df_unique.loc[df_unique['playerId'] == int(player_id)].iloc[0]
+            player_name = f"{player_data['firstName']} {player_data['lastName']}"
+            team_name = player_data['teamName']
+            name_area = player_data['nameArea']
+
+            # Registrar en el archivo CSV con "Automatizado" como tipo de informe
+            selected_report_type = "Automatizado"
+            log_uploaded_file(
+                player_id, file_name, file_hash, file_path, 
+                uploaded_by, selected_report_type,
+                player_name, team_name, name_area
+            )
 
             st.success(f"Informe guardado correctamente:\n\n- **Ruta**: {file_path}\n- **Jugador ID**: {player_id}")
 
