@@ -64,11 +64,18 @@ def show_tab_buscador():
         if players_with_folders:
             df_players = pd.DataFrame(players_with_folders)
 
-            # st.markdown("#### Buscar jugador por nombre")
+            st.markdown("#### Informes disponibles:")
 
-            
+            jugadores = df_players['Nombre'].dropna().unique()
+            selected_player = st.selectbox(
+                "Selecciona un jugador para filtrar:",
+                options=[""] + list(jugadores),  # Opción vacía al inicio
+                format_func=lambda x: "" if x == "" else x
+            )
 
-            st.markdown("#### Jugadores con informes disponibles")
+            # Filtrar los datos por jugador seleccionado
+            if selected_player:
+                df_players = df_players[df_players['Nombre'] == selected_player]
 
             # Configurar AgGrid
             gb = GridOptionsBuilder.from_dataframe(df_players)
